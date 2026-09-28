@@ -13,7 +13,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 
 ### Added
 
-- Nothing yet.
+- Xlsx Writer and Reader: `Chart::setDescription()` is the alternative text of a chart, written as `descr` of the chart's frame and read back, and the frame takes the chart's name; LibreOffice exports it as `/Alt` of the chart in a tagged PDF.
 
 ### Removed
 

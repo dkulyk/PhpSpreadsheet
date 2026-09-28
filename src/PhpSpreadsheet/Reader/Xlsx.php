@@ -1637,6 +1637,7 @@ class Xlsx extends BaseReader
                                                         'height' => $height,
                                                         'worksheetTitle' => $docSheet->getTitle(),
                                                         'oneCellAnchor' => true,
+                                                        'description' => self::getArrayItemString(self::getAttributes($oneCellAnchor->graphicFrame->nvGraphicFramePr->cNvPr), 'descr'),
                                                     ];
                                                 }
                                             }
@@ -1747,6 +1748,7 @@ class Xlsx extends BaseReader
                                                         'toOffsetX' => $toOffsetX,
                                                         'toOffsetY' => $toOffsetY,
                                                         'worksheetTitle' => $docSheet->getTitle(),
+                                                        'description' => self::getArrayItemString(self::getAttributes($twoCellAnchor->graphicFrame->nvGraphicFramePr->cNvPr), 'descr'),
                                                     ];
                                                 }
                                             }
@@ -1767,6 +1769,7 @@ class Xlsx extends BaseReader
                                                         'width' => $width,
                                                         'height' => $height,
                                                         'worksheetTitle' => $docSheet->getTitle(),
+                                                        'description' => self::getArrayItemString(self::getAttributes($absoluteAnchor->graphicFrame->nvGraphicFramePr->cNvPr), 'descr'),
                                                     ];
                                                 }
                                             }
@@ -2012,6 +2015,7 @@ class Xlsx extends BaseReader
                                 if (isset($chartDetails[$chartPositionRef]) && $excel->getSheetByName($charts[$chartEntryRef]['sheet']) !== null) {
                                     $excel->getSheetByName($charts[$chartEntryRef]['sheet'])->addChart($objChart);
                                     $objChart->setWorksheet($excel->getSheetByName($charts[$chartEntryRef]['sheet']));
+                                    $objChart->setDescription($chartDetails[$chartPositionRef]['description']);
                                     // For oneCellAnchor or absoluteAnchor positioned charts,
                                     //     toCoordinate is not in the data. Does it need to be calculated?
                                     if (array_key_exists('toCoordinate', $chartDetails[$chartPositionRef])) {
