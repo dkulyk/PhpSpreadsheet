@@ -13,7 +13,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 
 ### Added
 
-- Nothing yet.
+- `BaseDrawing::setDecorative()` marks an image as decorative. Xlsx writes and reads it as Excel and LibreOffice do (`adec:decorative` in the image's `cNvPr`), Ods as LibreOffice does (`loext:decorative` in the frame's graphic style, which the writer now defines); LibreOffice then leaves the image out of a tagged PDF as an artifact.
 
 ### Removed
 
