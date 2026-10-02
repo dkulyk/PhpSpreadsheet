@@ -13,7 +13,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 
 ### Added
 
-- Nothing yet.
+- `Document\Properties::setLanguage()`: the language of a spreadsheet as a BCP 47 tag, written and read as `dc:language` in Xlsx and Ods; the Ods writer also gives it to the default cell style, where LibreOffice keeps a spreadsheet's language, as LibreOffice writes it (the Western, Asian or complex slot by script, and `style:rfc-language-tag` for a tag with more than a language and a country), and the Ods reader reads it from there when there is no `dc:language`.
 
 ### Removed
 
