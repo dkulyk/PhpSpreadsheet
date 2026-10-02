@@ -13,7 +13,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 
 ### Added
 
-- Nothing yet.
+- Xlsx Writer and Reader: the description of a header/footer image is its alternative text, `alt` on the VML shape as Excel writes it.
 
 ### Removed
 
