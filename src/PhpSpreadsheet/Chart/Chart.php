@@ -13,6 +13,11 @@ class Chart
     private string $name;
 
     /**
+     * Alternative text, the description of the chart's frame.
+     */
+    private string $description = '';
+
+    /**
      * Worksheet.
      */
     private ?Worksheet $worksheet = null;
@@ -197,6 +202,18 @@ class Chart
     public function setName(string $name): self
     {
         $this->name = $name;
+
+        return $this;
+    }
+
+    public function getDescription(): string
+    {
+        return $this->description;
+    }
+
+    public function setDescription(string $description): self
+    {
+        $this->description = $description;
 
         return $this;
     }
