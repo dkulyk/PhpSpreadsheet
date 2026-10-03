@@ -141,35 +141,83 @@ class Content extends WriterPart
             $objWriter->writeAttribute('table:name', $spreadsheet->getSheet($sheetIndex)->getTitle());
             $objWriter->writeAttribute('table:style-name', Style::TABLE_STYLE_PREFIX . (string) ($sheetIndex + 1));
             $objWriter->writeElement('office:forms');
-            $lastColumn = 0;
-            foreach ($spreadsheet->getSheet($sheetIndex)->getColumnDimensions() as $columnDimension) {
-                $thisColumn = $columnDimension->getColumnNumeric();
-                $emptyColumns = $thisColumn - $lastColumn - 1;
-                if ($emptyColumns > 0) {
-                    $objWriter->startElement('table:table-column');
-                    $objWriter->writeAttribute('table:number-columns-repeated', (string) $emptyColumns);
-                    $objWriter->endElement();
-                }
-                $lastColumn = $thisColumn;
-                $objWriter->startElement('table:table-column');
-                $objWriter->writeAttribute(
-                    'table:style-name',
-                    sprintf('%s_%d_%d', Style::COLUMN_STYLE_PREFIX, $sheetIndex, $columnDimension->getColumnNumeric())
-                );
-                $objWriter->endElement();
-            }
+            $this->writeColumns($objWriter, $spreadsheet->getSheet($sheetIndex), $sheetIndex);
             $this->writeRows($objWriter, $spreadsheet->getSheet($sheetIndex), $sheetIndex);
             $objWriter->endElement();
         }
     }
 
     /**
-     * Write rows of the specified sheet.
+     * Write columns of the specified sheet, the columns to repeat on each printed page in table:table-header-columns.
+     */
+    private function writeColumns(XMLWriter $objWriter, Worksheet $sheet, int $sheetIndex): void
+    {
+        $pageSetup = $sheet->getPageSetup();
+        [$headerStart, $headerEnd] = [0, 0];
+        if ($pageSetup->isColumnsToRepeatAtLeftSet()) {
+            [$headerStart, $headerEnd] = array_map(
+                fn (string $column): int => Coordinate::columnIndexFromString(str_replace('$', '', $column)),
+                $pageSetup->getColumnsToRepeatAtLeft()
+            );
+            if ($headerStart > $headerEnd) {
+                [$headerStart, $headerEnd] = [0, 0];
+            }
+        }
+        $styledColumns = [];
+        foreach ($sheet->getColumnDimensions() as $columnDimension) {
+            $styledColumns[$columnDimension->getColumnNumeric()] = true;
+        }
+        $lastColumn = max([0, $headerEnd, ...array_keys($styledColumns)]);
+        $emptyColumns = 0;
+        for ($column = 1; $column <= $lastColumn; ++$column) {
+            if ($column === $headerStart) {
+                $this->writeEmptyColumns($objWriter, $emptyColumns);
+                $objWriter->startElement('table:table-header-columns');
+            }
+            if (isset($styledColumns[$column])) {
+                $this->writeEmptyColumns($objWriter, $emptyColumns);
+                $objWriter->startElement('table:table-column');
+                $objWriter->writeAttribute(
+                    'table:style-name',
+                    sprintf('%s_%d_%d', Style::COLUMN_STYLE_PREFIX, $sheetIndex, $column)
+                );
+                $objWriter->endElement();
+            } else {
+                ++$emptyColumns;
+            }
+            if ($column === $headerEnd) {
+                $this->writeEmptyColumns($objWriter, $emptyColumns);
+                $objWriter->endElement(); // table:table-header-columns
+            }
+        }
+    }
+
+    private function writeEmptyColumns(XMLWriter $objWriter, int &$emptyColumns): void
+    {
+        if ($emptyColumns > 0) {
+            $objWriter->startElement('table:table-column');
+            $objWriter->writeAttribute('table:number-columns-repeated', (string) $emptyColumns);
+            $objWriter->endElement();
+            $emptyColumns = 0;
+        }
+    }
+
+    /**
+     * Write rows of the specified sheet, the rows to repeat on each printed page in table:table-header-rows.
      */
     private function writeRows(XMLWriter $objWriter, Worksheet $sheet, int $sheetIndex): void
     {
         $spanRow = 0;
-        $rows = $sheet->getRowIterator();
+        $pageSetup = $sheet->getPageSetup();
+        [$headerStart, $headerEnd] = [0, 0];
+        if ($pageSetup->isRowsToRepeatAtTopSet()) {
+            [$headerStart, $headerEnd] = array_map(intval(...), $pageSetup->getRowsToRepeatAtTop());
+            if ($headerStart < 1 || $headerStart > $headerEnd) {
+                [$headerStart, $headerEnd] = [0, 0];
+            }
+        }
+        // header rows past the last row with data are written too
+        $rows = $sheet->getRowIterator(1, max($sheet->getHighestRow(), $headerEnd));
 
         // Build a map of drawings by their row position
         /** @var array<int, array<int, array{drawing: BaseDrawing, index: int}>> */
@@ -189,16 +237,12 @@ class Content extends WriterPart
             $cellIterator->rewind();
             $rowStyleExists = $sheet->rowDimensionExists($row->getRowIndex()) && $sheet->getRowDimension($row->getRowIndex())->getRowHeight() > 0;
             $rowIndex = $row->getRowIndex();
+            if ($rowIndex === $headerStart) {
+                $this->writeEmptyRows($objWriter, $spanRow);
+                $objWriter->startElement('table:table-header-rows');
+            }
             if ($cellIterator->valid() || $rowStyleExists || isset($drawingsByRow[$rowIndex])) {
-                if ($spanRow) {
-                    $objWriter->startElement('table:table-row');
-                    $objWriter->writeAttribute(
-                        'table:number-rows-repeated',
-                        (string) $spanRow
-                    );
-                    $objWriter->endElement();
-                    $spanRow = 0;
-                }
+                $this->writeEmptyRows($objWriter, $spanRow);
                 $objWriter->startElement('table:table-row');
                 if ($rowStyleExists) {
                     $objWriter->writeAttribute(
@@ -216,6 +260,23 @@ class Content extends WriterPart
             } else {
                 ++$spanRow;
             }
+            if ($rowIndex === $headerEnd) {
+                $this->writeEmptyRows($objWriter, $spanRow);
+                $objWriter->endElement(); // table:table-header-rows
+            }
+        }
+    }
+
+    private function writeEmptyRows(XMLWriter $objWriter, int &$spanRow): void
+    {
+        if ($spanRow > 0) {
+            $objWriter->startElement('table:table-row');
+            $objWriter->writeAttribute(
+                'table:number-rows-repeated',
+                (string) $spanRow
+            );
+            $objWriter->endElement();
+            $spanRow = 0;
         }
     }
 
