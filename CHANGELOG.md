@@ -69,6 +69,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 - Html and Pdf Writers display WMF and EMF images (as PNG) instead of an empty image.
 - Ods Writer no longer writes the formula text as the cell value when formulas are not pre-calculated. [Issue #5045](https://github.com/PHPOffice/PhpSpreadsheet/issues/5045) [PR #5046](https://github.com/PHPOffice/PhpSpreadsheet/pull/5046)
 - Avoid some breaks caused by new versions of libxml. [PR #5054](https://github.com/PHPOffice/PhpSpreadsheet/pull/5054)
+- Moving the relative references of a formula (relative defined names, Ods data validation) wraps negative shifts and whole-column and whole-row ranges around the sheet edge as the cell references already did, instead of throwing or giving `A-1`; it moves `Z:Z` by one column to `AA:AA` instead of `AAAAZ`, and leaves a function name such as `LOG10(` alone.
 
 ## 2026-09-15 - 5.10.0
 

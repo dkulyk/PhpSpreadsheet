@@ -87,4 +87,22 @@ return [
         2,
         '=SUM(3:$5)',
     ],
+    'function name like a cell' => [
+        '=LOG10(A1)',
+        1,
+        1,
+        '=LOG10(B2)',
+    ],
+    'longer column name' => [
+        '=SUM(Z:Z)',
+        1,
+        1,
+        '=SUM(AA:AA)',
+    ],
+    'wrap around the sheet edge' => [
+        '=A2+SUM(B:B)+SUM(1:2)',
+        -2,
+        -2,
+        '=XFC1048576+SUM(XFD:XFD)+SUM(1048575:1048576)',
+    ],
 ];
