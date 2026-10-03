@@ -106,8 +106,10 @@ class Content extends WriterPart
         $objWriter->startElement('office:body');
         $objWriter->startElement('office:spreadsheet');
         $objWriter->writeElement('table:calculation-settings');
+        $dataValidations = new DataValidations($objWriter, $this->getParentWriter()->getSpreadsheet(), $this->formulaConvertor);
+        $dataValidations->write();
 
-        $this->writeSheets($objWriter);
+        $this->writeSheets($objWriter, $dataValidations);
 
         (new AutoFilters($objWriter, $this->getParentWriter()->getSpreadsheet()))->write();
         // Defined names (ranges and formulae)
@@ -131,7 +133,7 @@ class Content extends WriterPart
     /**
      * Write sheets.
      */
-    private function writeSheets(XMLWriter $objWriter): void
+    private function writeSheets(XMLWriter $objWriter, DataValidations $dataValidations): void
     {
         $spreadsheet = $this->getParentWriter()->getSpreadsheet();
         $sheetCount = $spreadsheet->getSheetCount();
@@ -158,7 +160,7 @@ class Content extends WriterPart
                 );
                 $objWriter->endElement();
             }
-            $this->writeRows($objWriter, $spreadsheet->getSheet($sheetIndex), $sheetIndex);
+            $this->writeRows($objWriter, $spreadsheet->getSheet($sheetIndex), $sheetIndex, $dataValidations);
             $objWriter->endElement();
         }
     }
@@ -166,9 +168,9 @@ class Content extends WriterPart
     /**
      * Write rows of the specified sheet.
      */
-    private function writeRows(XMLWriter $objWriter, Worksheet $sheet, int $sheetIndex): void
+    private function writeRows(XMLWriter $objWriter, Worksheet $sheet, int $sheetIndex, DataValidations $dataValidations): void
     {
-        $spanRow = 0;
+        $emptyFrom = 1;
         $rows = $sheet->getRowIterator();
 
         // Build a map of drawings by their row position
@@ -190,15 +192,8 @@ class Content extends WriterPart
             $rowStyleExists = $sheet->rowDimensionExists($row->getRowIndex()) && $sheet->getRowDimension($row->getRowIndex())->getRowHeight() > 0;
             $rowIndex = $row->getRowIndex();
             if ($cellIterator->valid() || $rowStyleExists || isset($drawingsByRow[$rowIndex])) {
-                if ($spanRow) {
-                    $objWriter->startElement('table:table-row');
-                    $objWriter->writeAttribute(
-                        'table:number-rows-repeated',
-                        (string) $spanRow
-                    );
-                    $objWriter->endElement();
-                    $spanRow = 0;
-                }
+                $this->writeEmptyRows($objWriter, $emptyFrom, $rowIndex - 1, $sheetIndex, $dataValidations);
+                $emptyFrom = $rowIndex + 1;
                 $objWriter->startElement('table:table-row');
                 if ($rowStyleExists) {
                     $objWriter->writeAttribute(
@@ -211,11 +206,29 @@ class Content extends WriterPart
                         sprintf('%s%d', Style::ROW_STYLE_PREFIX, $sheetIndex)
                     );
                 }
-                $this->writeCells($objWriter, $cellIterator, $drawingsByRow, $rowIndex, $sheet);
+                $this->writeCells($objWriter, $cellIterator, $drawingsByRow, $rowIndex, $sheet, $dataValidations->rowSegments($sheetIndex, $rowIndex));
                 $objWriter->endElement();
-            } else {
-                ++$spanRow;
             }
+        }
+        // empty rows at the end are left out, unless a validation covers them
+        $this->writeEmptyRows($objWriter, $emptyFrom, $dataValidations->lastRow($sheetIndex), $sheetIndex, $dataValidations);
+    }
+
+    /**
+     * Write rows without cells, with the cells of the validations that cover them.
+     */
+    private function writeEmptyRows(XMLWriter $objWriter, int $fromRow, int $toRow, int $sheetIndex, DataValidations $dataValidations): void
+    {
+        while ($fromRow <= $toRow) {
+            $nextRow = min($toRow + 1, $dataValidations->nextChange($sheetIndex, $fromRow));
+            $segments = $dataValidations->rowSegments($sheetIndex, $fromRow);
+            $objWriter->startElement('table:table-row');
+            $objWriter->writeAttribute('table:number-rows-repeated', (string) ($nextRow - $fromRow));
+            if ($segments !== []) {
+                $this->writeCellSpan($objWriter, $segments[array_key_last($segments)][1] + 1, -1, $segments);
+            }
+            $objWriter->endElement();
+            $fromRow = $nextRow;
         }
     }
 
@@ -223,8 +236,9 @@ class Content extends WriterPart
      * Write cells of the specified row.
      *
      * @param array<int, array<int, array{drawing: BaseDrawing, index: int}>> $drawingsByRow
+     * @param list<array{int, int, string}> $segments validations of the row
      */
-    private function writeCells(XMLWriter $objWriter, RowCellIterator $cells, array $drawingsByRow, int $rowIndex, Worksheet $sheet): void
+    private function writeCells(XMLWriter $objWriter, RowCellIterator $cells, array $drawingsByRow, int $rowIndex, Worksheet $sheet, array $segments): void
     {
         $prevColumn = -1;
         // Get drawings for this row
@@ -240,9 +254,14 @@ class Content extends WriterPart
             $column = Coordinate::columnIndexFromString($cell->getColumn()) - 1;
             $attributes = $cell->getFormulaAttributes() ?? [];
 
-            $this->writeCellSpan($objWriter, $column, $prevColumn);
+            $this->writeCellSpan($objWriter, $column, $prevColumn, $segments);
             $objWriter->startElement('table:table-cell');
             $this->writeCellMerge($objWriter, $cell);
+            foreach ($segments as [$colStart, $colEnd, $name]) {
+                if ($column >= $colStart && $column <= $colEnd) {
+                    $objWriter->writeAttribute('table:content-validation-name', $name);
+                }
+            }
 
             // Style XF
             $style = $cell->getXfIndex();
@@ -425,6 +444,9 @@ class Content extends WriterPart
             $objWriter->endElement();
             $prevColumn = $column;
         }
+        if ($segments !== []) {
+            $this->writeCellSpan($objWriter, $segments[array_key_last($segments)][1] + 1, $prevColumn, $segments);
+        }
 
         // Write any remaining drawings that don't have cells.
         // I don't know how to trigger the if condition below,
@@ -480,18 +502,39 @@ class Content extends WriterPart
     }
 
     /**
-     * Write span.
+     * Write the empty cells between two columns, with the validations that cover them.
+     *
+     * @param list<array{int, int, string}> $segments
      */
-    private function writeCellSpan(XMLWriter $objWriter, int $curColumn, int $prevColumn): void
+    private function writeCellSpan(XMLWriter $objWriter, int $curColumn, int $prevColumn, array $segments): void
     {
-        $diff = $curColumn - $prevColumn - 1;
-        if (1 === $diff) {
-            $objWriter->writeElement('table:table-cell');
-        } elseif ($diff > 1) {
-            $objWriter->startElement('table:table-cell');
-            $objWriter->writeAttribute('table:number-columns-repeated', (string) $diff);
-            $objWriter->endElement();
+        $column = $prevColumn + 1;
+        foreach ($segments as [$colStart, $colEnd, $name]) {
+            if ($colEnd < $column || $colStart >= $curColumn) {
+                continue;
+            }
+            $this->writeEmptyCells($objWriter, $colStart - $column, null);
+            $column = max($colStart, $column);
+            $lastColumn = min($colEnd, $curColumn - 1);
+            $this->writeEmptyCells($objWriter, $lastColumn - $column + 1, $name);
+            $column = $lastColumn + 1;
         }
+        $this->writeEmptyCells($objWriter, $curColumn - $column, null);
+    }
+
+    private function writeEmptyCells(XMLWriter $objWriter, int $count, ?string $validationName): void
+    {
+        if ($count < 1) {
+            return;
+        }
+        $objWriter->startElement('table:table-cell');
+        if ($count > 1) {
+            $objWriter->writeAttribute('table:number-columns-repeated', (string) $count);
+        }
+        if ($validationName !== null) {
+            $objWriter->writeAttribute('table:content-validation-name', $validationName);
+        }
+        $objWriter->endElement();
     }
 
     /** @var array<string, callable> */

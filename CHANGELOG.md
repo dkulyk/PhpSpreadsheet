@@ -14,6 +14,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 ### Added
 
 - Support for Box and Whisker charts in Xlsx reader and writer. [Issue #3493](https://github.com/PHPOffice/PhpSpreadsheet/issues/3493)
+- Ods Writer writes data validation (the rule, the input prompt and the error alert), and Ods Reader reads it; it was lost on an Ods save.
 
 ### Removed
 
