@@ -158,9 +158,17 @@ class Drawing extends WriterPart
 
         $objWriter->startElement('a:graphic');
         $objWriter->startElement('a:graphicData');
-        $objWriter->writeAttribute('uri', Namespaces::CHART);
-        $objWriter->startElement('c:chart');
-        $objWriter->writeAttribute('xmlns:c', Namespaces::CHART);
+
+        if ($chart->getChartEx() === null) {
+            $objWriter->writeAttribute('uri', Namespaces::CHART);
+            $objWriter->startElement('c:chart');
+            $objWriter->writeAttribute('xmlns:c', Namespaces::CHART);
+        } else {
+            $objWriter->writeAttribute('uri', Namespaces::CHART_EX);
+            $objWriter->startElement('cx:chart');
+            $objWriter->writeAttribute('xmlns:cx', Namespaces::CHART_EX);
+        }
+
         $objWriter->writeAttribute('xmlns:r', Namespaces::SCHEMA_OFFICE_DOCUMENT);
         $objWriter->writeAttribute('r:id', 'rId' . $relationId);
         $objWriter->endElement();
@@ -238,6 +246,9 @@ class Drawing extends WriterPart
             $objWriter->writeAttribute('id', (string) $relationId);
             $objWriter->writeAttribute('name', $drawing->getName());
             $objWriter->writeAttribute('descr', $drawing->getDescription());
+            if ($drawing->getTitle() !== '') {
+                $objWriter->writeAttribute('title', $drawing->getTitle());
+            }
 
             //a:hlinkClick
             $this->writeHyperLinkDrawing($objWriter, $hlinkClickId);
