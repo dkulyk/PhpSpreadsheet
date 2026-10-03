@@ -14,6 +14,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 ### Added
 
 - Support for Box and Whisker charts in Xlsx reader and writer. [Issue #3493](https://github.com/PHPOffice/PhpSpreadsheet/issues/3493)
+- Ods Writer and Reader: headers and footers (text, with page, page count, sheet, file, date and time fields) are written to the master page of each sheet and read back as Excel codes, and print titles are written as `table:table-header-rows` / `table:table-header-columns` and read back, so that LibreOffice prints them. [Issue #____](https://github.com/PHPOffice/PhpSpreadsheet/issues/____) [PR #____](https://github.com/PHPOffice/PhpSpreadsheet/pull/____)
 
 ### Removed
 

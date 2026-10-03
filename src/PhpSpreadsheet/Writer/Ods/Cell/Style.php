@@ -24,6 +24,7 @@ class Style
     public const COLUMN_STYLE_PREFIX = 'co';
     public const ROW_STYLE_PREFIX = 'ro';
     public const TABLE_STYLE_PREFIX = 'ta';
+    public const MASTER_PAGE_PREFIX = 'Mp';
     public const INDENT_TO_INCHES = 0.1043; // undocumented, used trial and error
 
     private XMLWriter $writer;
@@ -389,7 +390,7 @@ class Style
             'style:name',
             sprintf('%s%d', self::TABLE_STYLE_PREFIX, $sheetId)
         );
-        $this->writer->writeAttribute('style:master-page-name', 'Default');
+        $this->writer->writeAttribute('style:master-page-name', self::MASTER_PAGE_PREFIX . $sheetId);
 
         $this->writer->startElement('style:table-properties');
 
