@@ -15,6 +15,7 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Helper\Dimension as HelperDimension;
 use PhpOffice\PhpSpreadsheet\Reader\Ods\AutoFilter;
+use PhpOffice\PhpSpreadsheet\Reader\Ods\DataValidations;
 use PhpOffice\PhpSpreadsheet\Reader\Ods\DefinedNames;
 use PhpOffice\PhpSpreadsheet\Reader\Ods\FormulaTranslator;
 use PhpOffice\PhpSpreadsheet\Reader\Ods\PageSettings;
@@ -48,6 +49,8 @@ class Ods extends BaseReader
     private ZipArchive $zip;
 
     private string $filename;
+
+    private DataValidations $dataValidations;
 
     /**
      * Create a new Ods Reader instance.
@@ -454,6 +457,7 @@ class Ods extends BaseReader
 
         $autoFilterReader = new AutoFilter($spreadsheet, $tableNs);
         $definedNameReader = new DefinedNames($spreadsheet, $tableNs);
+        $this->dataValidations = new DataValidations($tableNs, $textNs, fn (DOMElement $paragraph): string => $this->scanElementForText($paragraph));
         $columnWidths = [];
         $automaticStyle0 = $this->readDataOnly ? null : $dom->getElementsByTagNameNS($officeNs, 'automatic-styles')->item(0);
         $this->processSomeNumberFormats($automaticStyle0, $numberNs, $styleNs);
@@ -531,6 +535,9 @@ class Ods extends BaseReader
 
         foreach ($spreadsheets as $workbookData) {
             /** @var DOMElement $workbookData */
+            if (!$this->readDataOnly) {
+                $this->dataValidations->read($workbookData);
+            }
             $tables = $workbookData->getElementsByTagNameNS($tableNs, 'table');
 
             $worksheetID = 0;
@@ -658,6 +665,7 @@ class Ods extends BaseReader
                             break;
                     }
                 }
+                $this->dataValidations->applyTo($spreadsheet->getActiveSheet());
                 $pageSettings->setVisibilityForWorksheet(
                     $spreadsheet->getActiveSheet(),
                     $worksheetStyleName
@@ -895,6 +903,10 @@ class Ods extends BaseReader
             }
             $columnIndex = Coordinate::columnIndexFromString($columnID);
             self::checkColumnsRepeated($columnID, $colRepeats);
+            $validationName = $cellData->getAttributeNS($tableNs, 'content-validation-name');
+            if ($validationName !== '') {
+                $this->dataValidations->addCells($validationName, $columnIndex, $rowID, $colRepeats, $rowRepeats);
+            }
             $styleName = $cellData->getAttributeNS($tableNs, 'style-name');
             if ($styleName === '') {
                 if ($worksheet === null || !$worksheet->columnDimensionExists($columnID)) {
