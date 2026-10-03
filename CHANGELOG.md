@@ -14,6 +14,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 ### Added
 
 - Support for Box and Whisker charts in Xlsx reader and writer. [Issue #3493](https://github.com/PHPOffice/PhpSpreadsheet/issues/3493)
+- `BaseDrawing::setTitle()` gives an image a title besides its description. Xlsx writes and reads it as `title` on the image's `cNvPr`, Ods as `svg:title` on the frame; LibreOffice exports "title - description" as the alternative text of the figure. [Issue #____](https://github.com/PHPOffice/PhpSpreadsheet/issues/____) [PR #____](https://github.com/PHPOffice/PhpSpreadsheet/pull/____)
 
 ### Removed
 

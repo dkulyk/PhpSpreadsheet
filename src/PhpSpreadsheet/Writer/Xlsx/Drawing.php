@@ -246,6 +246,9 @@ class Drawing extends WriterPart
             $objWriter->writeAttribute('id', (string) $relationId);
             $objWriter->writeAttribute('name', $drawing->getName());
             $objWriter->writeAttribute('descr', $drawing->getDescription());
+            if ($drawing->getTitle() !== '') {
+                $objWriter->writeAttribute('title', $drawing->getTitle());
+            }
 
             //a:hlinkClick
             $this->writeHyperLinkDrawing($objWriter, $hlinkClickId);

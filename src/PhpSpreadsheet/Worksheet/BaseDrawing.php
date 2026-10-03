@@ -45,6 +45,11 @@ class BaseDrawing implements IComparable
     protected string $description = '';
 
     /**
+     * Title, a short alternative text that LibreOffice puts before the description.
+     */
+    protected string $title = '';
+
+    /**
      * Worksheet.
      */
     protected ?Worksheet $worksheet = null;
@@ -184,6 +189,18 @@ class BaseDrawing implements IComparable
     public function setDescription(string $description): self
     {
         $this->description = $description;
+
+        return $this;
+    }
+
+    public function getTitle(): string
+    {
+        return $this->title;
+    }
+
+    public function setTitle(string $title): self
+    {
+        $this->title = $title;
 
         return $this;
     }
@@ -436,6 +453,7 @@ class BaseDrawing implements IComparable
         return md5(
             $this->name
             . $this->description
+            . $this->title
             . (($this->worksheet === null) ? '' : (string) spl_object_id($this->worksheet))
             . $this->coordinates
             . $this->offsetX
