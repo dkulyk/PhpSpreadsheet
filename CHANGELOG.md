@@ -42,6 +42,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 - Ods Writer and Reader: the description of an image is written as `svg:desc` and read back, so that LibreOffice exports it as the alternative text of the figure. [Issue #5009](https://github.com/PHPOffice/PhpSpreadsheet/issues/5009) [PR #5010](https://github.com/PHPOffice/PhpSpreadsheet/pull/5010)
 - Ods Writer and Csv Writer (with `preferHyperlinkToLabel`) no longer add an empty hyperlink to every cell they write, which made a later Xlsx save throw "Invalid parameters passed." [Issue #5007](https://github.com/PHPOffice/PhpSpreadsheet/issues/5007) [PR #5008](https://github.com/PHPOffice/PhpSpreadsheet/pull/5008) [PR #5021](https://github.com/PHPOffice/PhpSpreadsheet/pull/5021)
 - Ods Writer keeps the hyperlink of a number, boolean or formula cell, and Ods Reader reads it back; only text cells had one. [Issue #5013](https://github.com/PHPOffice/PhpSpreadsheet/issues/5013) [PR #5014](https://github.com/PHPOffice/PhpSpreadsheet/pull/5014)
+- Moving the relative references of a formula (relative defined names, Ods data validation) wraps negative shifts and whole-column and whole-row ranges around the sheet edge as the cell references already did, instead of throwing or giving `A-1`; it moves `Z:Z` by one column to `AA:AA` instead of `AAAAZ`, and leaves a function name such as `LOG10(` alone.
 
 ## 2026-09-15 - 5.10.0
 

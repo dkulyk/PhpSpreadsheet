@@ -906,7 +906,8 @@ class ReferenceHelper
     private function updateCellReferencesAllWorksheets(string $formula, int $numberOfColumns, int $numberOfRows): string
     {
         $splitCount = preg_match_all(
-            '/' . Calculation::CALCULATION_REGEXP_CELLREF_RELATIVE . '/mui',
+            // a name followed by ( is a function, e.g. LOG10(
+            '/' . Calculation::CALCULATION_REGEXP_CELLREF_RELATIVE . '(?!\()/mui',
             $formula,
             $splitRanges,
             PREG_OFFSET_CAPTURE
@@ -930,13 +931,12 @@ class ReferenceHelper
             $row = $rows[$splitCount][0];
 
             if ($column[0] !== '$') {
-                $column = ((Coordinate::columnIndexFromString($column) + $numberOfColumns) % AddressRange::MAX_COLUMN_INT) ?: AddressRange::MAX_COLUMN_INT;
-                $column = Coordinate::stringFromColumnIndex($column);
+                $column = Coordinate::stringFromColumnIndex($this->wrap(Coordinate::columnIndexFromString($column), $numberOfColumns, AddressRange::MAX_COLUMN_INT));
                 $rowOffset -= ($columnLength - strlen($column));
                 $formula = substr($formula, 0, $columnOffset) . $column . substr($formula, $columnOffset + $columnLength);
             }
             if (!empty($row) && $row[0] !== '$') {
-                $row = (((int) $row + $numberOfRows) % AddressRange::MAX_ROW) ?: AddressRange::MAX_ROW;
+                $row = $this->wrap((int) $row, $numberOfRows, AddressRange::MAX_ROW);
                 $formula = substr($formula, 0, $rowOffset) . $row . substr($formula, $rowOffset + $rowLength);
             }
         }
@@ -970,13 +970,14 @@ class ReferenceHelper
             $fromColumn = $fromColumns[$splitCount][0];
             $toColumn = $toColumns[$splitCount][0];
 
-            if (!empty($fromColumn) && $fromColumn[0] !== '$') {
-                $fromColumn = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($fromColumn) + $numberOfColumns);
-                $formula = substr($formula, 0, $fromColumnOffset) . $fromColumn . substr($formula, $fromColumnOffset + $fromColumnLength);
-            }
+            // the end first, so that the offset of the start still holds
             if (!empty($toColumn) && $toColumn[0] !== '$') {
-                $toColumn = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($toColumn) + $numberOfColumns);
+                $toColumn = Coordinate::stringFromColumnIndex($this->wrap(Coordinate::columnIndexFromString($toColumn), $numberOfColumns, AddressRange::MAX_COLUMN_INT));
                 $formula = substr($formula, 0, $toColumnOffset) . $toColumn . substr($formula, $toColumnOffset + $toColumnLength);
+            }
+            if (!empty($fromColumn) && $fromColumn[0] !== '$') {
+                $fromColumn = Coordinate::stringFromColumnIndex($this->wrap(Coordinate::columnIndexFromString($fromColumn), $numberOfColumns, AddressRange::MAX_COLUMN_INT));
+                $formula = substr($formula, 0, $fromColumnOffset) . $fromColumn . substr($formula, $fromColumnOffset + $fromColumnLength);
             }
         }
 
@@ -1009,17 +1010,26 @@ class ReferenceHelper
             $fromRow = $fromRows[$splitCount][0];
             $toRow = $toRows[$splitCount][0];
 
-            if (!empty($fromRow) && $fromRow[0] !== '$') {
-                $fromRow = (int) $fromRow + $numberOfRows;
-                $formula = substr($formula, 0, $fromRowOffset) . $fromRow . substr($formula, $fromRowOffset + $fromRowLength);
-            }
+            // the end first, so that the offset of the start still holds
             if (!empty($toRow) && $toRow[0] !== '$') {
-                $toRow = (int) $toRow + $numberOfRows;
+                $toRow = $this->wrap((int) $toRow, $numberOfRows, AddressRange::MAX_ROW);
                 $formula = substr($formula, 0, $toRowOffset) . $toRow . substr($formula, $toRowOffset + $toRowLength);
+            }
+            if (!empty($fromRow) && $fromRow[0] !== '$') {
+                $fromRow = $this->wrap((int) $fromRow, $numberOfRows, AddressRange::MAX_ROW);
+                $formula = substr($formula, 0, $fromRowOffset) . $fromRow . substr($formula, $fromRowOffset + $fromRowLength);
             }
         }
 
         return $formula;
+    }
+
+    /**
+     * Move a relative column or row index, wrapping around the sheet edge as Excel does.
+     */
+    private function wrap(int $index, int $shift, int $max): int
+    {
+        return (($index - 1 + $shift) % $max + $max) % $max + 1;
     }
 
     /**
