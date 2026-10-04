@@ -158,9 +158,17 @@ class Drawing extends WriterPart
 
         $objWriter->startElement('a:graphic');
         $objWriter->startElement('a:graphicData');
-        $objWriter->writeAttribute('uri', Namespaces::CHART);
-        $objWriter->startElement('c:chart');
-        $objWriter->writeAttribute('xmlns:c', Namespaces::CHART);
+
+        if ($chart->getChartEx() === null) {
+            $objWriter->writeAttribute('uri', Namespaces::CHART);
+            $objWriter->startElement('c:chart');
+            $objWriter->writeAttribute('xmlns:c', Namespaces::CHART);
+        } else {
+            $objWriter->writeAttribute('uri', Namespaces::CHART_EX);
+            $objWriter->startElement('cx:chart');
+            $objWriter->writeAttribute('xmlns:cx', Namespaces::CHART_EX);
+        }
+
         $objWriter->writeAttribute('xmlns:r', Namespaces::SCHEMA_OFFICE_DOCUMENT);
         $objWriter->writeAttribute('r:id', 'rId' . $relationId);
         $objWriter->endElement();
@@ -241,6 +249,19 @@ class Drawing extends WriterPart
 
             //a:hlinkClick
             $this->writeHyperLinkDrawing($objWriter, $hlinkClickId);
+
+            // The form of Excel and LibreOffice
+            if ($drawing->isDecorative()) {
+                $objWriter->startElement('a:extLst');
+                $objWriter->startElement('a:ext');
+                $objWriter->writeAttribute('uri', '{C183D7F6-B498-43B3-948B-1728B52AA6E4}');
+                $objWriter->startElement('adec:decorative');
+                $objWriter->writeAttribute('xmlns:adec', 'http://schemas.microsoft.com/office/drawing/2017/decorative');
+                $objWriter->writeAttribute('val', '1');
+                $objWriter->endElement();
+                $objWriter->endElement();
+                $objWriter->endElement();
+            }
 
             $objWriter->endElement();
 

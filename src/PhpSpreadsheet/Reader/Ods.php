@@ -41,6 +41,10 @@ class Ods extends BaseReader
 {
     const INITIAL_FILE = 'content.xml';
 
+    private const DRAW_NS = 'urn:oasis:names:tc:opendocument:xmlns:drawing:1.0';
+
+    private const LOEXT_NS = 'urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0';
+
     private ZipArchive $zip;
 
     private string $filename;
@@ -318,7 +322,16 @@ class Ods extends BaseReader
     /** @var string[] */
     private array $numberFormats;
 
+    /** @var array<string, true> The graphic styles that make a frame decorative */
+    private array $decorativeStyles = [];
+
     private int $highestDataIndex;
+
+    /** @var array<string, string> links LibreOffice keeps in a cell style, by style name */
+    private array $styleHyperlinks = [];
+
+    /** @var array<int, string> default cell style of a column of the current sheet, only where it has a link */
+    private array $columnHyperlinkStyles = [];
 
     /**
      * Loads PhpSpreadsheet from file into PhpSpreadsheet instance.
@@ -419,12 +432,37 @@ class Ods extends BaseReader
 
         $pageSettings->readStyleCrossReferences($dom);
 
+        // LibreOffice writes the link of a non-text cell into its style, as
+        // <style:table-cell-properties><style:hyperlink xlink:href="..."/>, and loext:hyperlink next to it
+        $this->styleHyperlinks = [];
+        foreach ($dom->getElementsByTagNameNS($styleNs, 'table-cell-properties') as $cellProperties) {
+            foreach ($cellProperties->childNodes as $child) {
+                if ($child instanceof DOMElement && $child->localName === 'hyperlink' && $child->getAttributeNS($xlinkNs, 'href') !== '' && $cellProperties->parentNode instanceof DOMElement) {
+                    $this->styleHyperlinks[$cellProperties->parentNode->getAttributeNS($styleNs, 'name')] = $child->getAttributeNS($xlinkNs, 'href');
+                }
+            }
+        }
+
         $autoFilterReader = new AutoFilter($spreadsheet, $tableNs);
         $definedNameReader = new DefinedNames($spreadsheet, $tableNs);
         $columnWidths = [];
         $automaticStyle0 = $this->readDataOnly ? null : $dom->getElementsByTagNameNS($officeNs, 'automatic-styles')->item(0);
         $this->processSomeNumberFormats($automaticStyle0, $numberNs, $styleNs);
         $automaticStyles = ($automaticStyle0 === null) ? [] : $automaticStyle0->getElementsByTagNameNS($styleNs, 'style');
+        // Even with readDataOnly, which still reads the drawings
+        $this->decorativeStyles = [];
+        $graphicProperties = $dom->getElementsByTagNameNS($officeNs, 'automatic-styles')->item(0)?->getElementsByTagNameNS($styleNs, 'graphic-properties') ?? [];
+        foreach ($graphicProperties as $graphicProperty) {
+            $style = $graphicProperty->parentNode;
+            // loext as LibreOffice writes it, draw as ODF 1.4 does
+            if (
+                $style instanceof DOMElement
+                && $style->getAttributeNS($styleNs, 'family') === 'graphic'
+                && ($graphicProperty->getAttributeNS(self::LOEXT_NS, 'decorative') === 'true' || $graphicProperty->getAttributeNS(self::DRAW_NS, 'decorative') === 'true')
+            ) {
+                $this->decorativeStyles[$style->getAttributeNS($styleNs, 'name')] = true;
+            }
+        }
         foreach ($automaticStyles as $automaticStyle) {
             $styleName = $automaticStyle->getAttributeNS($styleNs, 'name');
             $styleFamily = $automaticStyle->getAttributeNS($styleNs, 'family');
@@ -520,6 +558,7 @@ class Ods extends BaseReader
                 $rowID = 1;
                 $tableColumnIndex = 1;
                 $this->highestDataIndex = AddressRange::MAX_COLUMN_INT;
+                $this->columnHyperlinkStyles = [];
                 foreach ($worksheetDataSet->childNodes as $childNode) {
                     /** @var DOMElement $childNode */
 
@@ -611,6 +650,10 @@ class Ods extends BaseReader
                     }
                 }
                 $pageSettings->setVisibilityForWorksheet(
+                    $spreadsheet->getActiveSheet(),
+                    $worksheetStyleName
+                );
+                $pageSettings->setRightToLeftForWorksheet(
                     $spreadsheet->getActiveSheet(),
                     $worksheetStyleName
                 );
@@ -1031,6 +1074,8 @@ class Ods extends BaseReader
                         $hyperlink = $link->item(0)->getAttributeNS($xlinkNs, 'href');
                     }
                 }
+                // A cell without a style takes the default cell style of its column
+                $hyperlink ??= $this->styleHyperlinks[$styleName === '' ? ($this->columnHyperlinkStyles[$columnIndex] ?? '') : $styleName] ?? null;
 
                 switch ($type) {
                     case 'string':
@@ -1271,6 +1316,7 @@ class Ods extends BaseReader
                     ->setHeight((int) $height)
                     ->setName($drawName)
                     ->setDescription($description)
+                    ->setDecorative(isset($this->decorativeStyles[$styleName]))
                     ->setWorksheet($worksheet);
             }
         }
@@ -1417,6 +1463,11 @@ class Ods extends BaseReader
         }
         if ($processStyles) {
             $defaultStyleName = $childNode->getAttributeNS($tableNs, 'default-cell-style-name');
+            if (isset($this->styleHyperlinks[$defaultStyleName])) {
+                for ($column = $tableColumnIndex; $column < $tableColumnIndex + $colRepeats && $column <= AddressRange::MAX_COLUMN_INT; ++$column) {
+                    $this->columnHyperlinkStyles[$column] = $defaultStyleName;
+                }
+            }
             if ($defaultStyleName !== 'Default' && isset($this->allStyles[$defaultStyleName])) {
                 $tableColumnIndex2 = $tableColumnIndex;
                 $tableColumnString = Coordinate::stringFromColumnIndex($tableColumnIndex2);
