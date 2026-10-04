@@ -320,6 +320,12 @@ class Ods extends BaseReader
 
     private int $highestDataIndex;
 
+    /** @var array<string, string> links LibreOffice keeps in a cell style, by style name */
+    private array $styleHyperlinks = [];
+
+    /** @var array<int, string> default cell style of a column of the current sheet, only where it has a link */
+    private array $columnHyperlinkStyles = [];
+
     /**
      * Loads PhpSpreadsheet from file into PhpSpreadsheet instance.
      */
@@ -357,6 +363,15 @@ class Ods extends BaseReader
         $tableNs = (string) $dom->lookupNamespaceUri('table');
         $textNs = (string) $dom->lookupNamespaceUri('text');
         $xlinkNs = (string) $dom->lookupNamespaceUri('xlink');
+
+        // LibreOffice keeps the language of a spreadsheet there, not in dc:language; read even with readDataOnly
+        foreach ($dom->getElementsByTagNameNS($styleNs, 'default-style') as $defaultStyle) {
+            if ($spreadsheet->getProperties()->getLanguage() === '' && $defaultStyle->getAttributeNS($styleNs, 'family') === 'table-cell') {
+                foreach ($defaultStyle->getElementsByTagNameNS($styleNs, 'text-properties') as $textProperty) {
+                    $spreadsheet->getProperties()->setLanguage(self::languageTag($textProperty, $styleNs, $fontNs));
+                }
+            }
+        }
 
         $automaticStyle0 = $this->readDataOnly ? null : $dom->getElementsByTagNameNS($officeNs, 'styles')->item(0);
         $this->processSomeNumberFormats($automaticStyle0, $numberNs, $styleNs);
@@ -418,6 +433,17 @@ class Ods extends BaseReader
         $dom = $this->loadDom(self::INITIAL_FILE, $zip);
 
         $pageSettings->readStyleCrossReferences($dom);
+
+        // LibreOffice writes the link of a non-text cell into its style, as
+        // <style:table-cell-properties><style:hyperlink xlink:href="..."/>, and loext:hyperlink next to it
+        $this->styleHyperlinks = [];
+        foreach ($dom->getElementsByTagNameNS($styleNs, 'table-cell-properties') as $cellProperties) {
+            foreach ($cellProperties->childNodes as $child) {
+                if ($child instanceof DOMElement && $child->localName === 'hyperlink' && $child->getAttributeNS($xlinkNs, 'href') !== '' && $cellProperties->parentNode instanceof DOMElement) {
+                    $this->styleHyperlinks[$cellProperties->parentNode->getAttributeNS($styleNs, 'name')] = $child->getAttributeNS($xlinkNs, 'href');
+                }
+            }
+        }
 
         $autoFilterReader = new AutoFilter($spreadsheet, $tableNs);
         $definedNameReader = new DefinedNames($spreadsheet, $tableNs);
@@ -520,6 +546,7 @@ class Ods extends BaseReader
                 $rowID = 1;
                 $tableColumnIndex = 1;
                 $this->highestDataIndex = AddressRange::MAX_COLUMN_INT;
+                $this->columnHyperlinkStyles = [];
                 foreach ($worksheetDataSet->childNodes as $childNode) {
                     /** @var DOMElement $childNode */
 
@@ -611,6 +638,10 @@ class Ods extends BaseReader
                     }
                 }
                 $pageSettings->setVisibilityForWorksheet(
+                    $spreadsheet->getActiveSheet(),
+                    $worksheetStyleName
+                );
+                $pageSettings->setRightToLeftForWorksheet(
                     $spreadsheet->getActiveSheet(),
                     $worksheetStyleName
                 );
@@ -1031,6 +1062,8 @@ class Ods extends BaseReader
                         $hyperlink = $link->item(0)->getAttributeNS($xlinkNs, 'href');
                     }
                 }
+                // A cell without a style takes the default cell style of its column
+                $hyperlink ??= $this->styleHyperlinks[$styleName === '' ? ($this->columnHyperlinkStyles[$columnIndex] ?? '') : $styleName] ?? null;
 
                 switch ($type) {
                     case 'string':
@@ -1276,6 +1309,26 @@ class Ods extends BaseReader
         }
     }
 
+    /**
+     * The language of text properties as a BCP 47 tag, or '' for none.
+     */
+    private static function languageTag(DOMElement $textProperties, string $styleNs, string $fontNs): string
+    {
+        $tag = $textProperties->getAttributeNS($styleNs, 'rfc-language-tag');
+        $language = strtolower($textProperties->getAttributeNS($fontNs, 'language'));
+        // zxx: no linguistic content
+        if ($tag !== '' || !Preg::isMatch('/^[a-z]{2,3}$/', $language) || $language === 'zxx') {
+            return $tag;
+        }
+        $script = $textProperties->getAttributeNS($fontNs, 'script');
+        $country = $textProperties->getAttributeNS($fontNs, 'country');
+
+        // ponytail: the Western slot only, where LibreOffice always writes one; an Asian or complex document language needs dc:language
+        return $language
+            . (Preg::isMatch('/^[a-z]{4}$/i', $script) ? '-' . ucfirst(strtolower($script)) : '')
+            . (Preg::isMatch('/^([a-z]{2}|\d{3})$/i', $country) ? '-' . strtoupper($country) : '');
+    }
+
     private static function extractNodeName(string $key): string
     {
         // Remove ns from node name
@@ -1417,6 +1470,11 @@ class Ods extends BaseReader
         }
         if ($processStyles) {
             $defaultStyleName = $childNode->getAttributeNS($tableNs, 'default-cell-style-name');
+            if (isset($this->styleHyperlinks[$defaultStyleName])) {
+                for ($column = $tableColumnIndex; $column < $tableColumnIndex + $colRepeats && $column <= AddressRange::MAX_COLUMN_INT; ++$column) {
+                    $this->columnHyperlinkStyles[$column] = $defaultStyleName;
+                }
+            }
             if ($defaultStyleName !== 'Default' && isset($this->allStyles[$defaultStyleName])) {
                 $tableColumnIndex2 = $tableColumnIndex;
                 $tableColumnString = Coordinate::stringFromColumnIndex($tableColumnIndex2);
