@@ -3,12 +3,18 @@
 namespace PhpOffice\PhpSpreadsheet\Reader\Ods;
 
 use DOMDocument;
+use DOMElement;
+use DOMNode;
+use DOMText;
+use PhpOffice\PhpSpreadsheet\Worksheet\HeaderFooter;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use stdClass;
 
 class PageSettings
 {
+    private const LOEXT_NS = 'urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0';
+
     private string $officeNs = '';
 
     private string $stylesNs = '';
@@ -16,6 +22,8 @@ class PageSettings
     private string $stylesFo = '';
 
     private string $tableNs = '';
+
+    private string $textNs = '';
 
     /**
      * @var string[]
@@ -40,6 +48,11 @@ class PageSettings
      */
     private array $masterPrintStylesCrossReference = [];
 
+    /**
+     * @var DOMElement[]
+     */
+    private array $masterPages = [];
+
     public function __construct(DOMDocument $styleDom)
     {
         $this->setDomNameSpaces($styleDom);
@@ -53,6 +66,7 @@ class PageSettings
         $this->stylesNs = (string) $styleDom->lookupNamespaceUri('style');
         $this->stylesFo = (string) $styleDom->lookupNamespaceUri('fo');
         $this->tableNs = (string) $styleDom->lookupNamespaceUri('table');
+        $this->textNs = (string) $styleDom->lookupNamespaceUri('text');
     }
 
     private function readPageSettingStyles(DOMDocument $styleDom): void
@@ -105,6 +119,7 @@ class PageSettings
             $styleMasterName = $styleMasterSet->getAttributeNS($this->stylesNs, 'name');
             $pageLayoutName = $styleMasterSet->getAttributeNS($this->stylesNs, 'page-layout-name');
             $this->masterPrintStylesCrossReference[$styleMasterName] = $pageLayoutName;
+            $this->masterPages[$styleMasterName] = $styleMasterSet;
         }
     }
 
@@ -162,6 +177,7 @@ class PageSettings
         if (!array_key_exists($masterStyleName, $this->masterPrintStylesCrossReference)) {
             return;
         }
+        $this->setHeaderFooter($worksheet->getHeaderFooter(), $this->masterPages[$masterStyleName]);
         $printSettingsIndex = $this->masterPrintStylesCrossReference[$masterStyleName];
 
         if (!array_key_exists($printSettingsIndex, $this->pageLayoutStyles)) {
@@ -186,5 +202,99 @@ class PageSettings
             ->setBottom($printSettings->marginBottom)
             ->setHeader($printSettings->marginHeader)
             ->setFooter($printSettings->marginFooter);
+    }
+
+    /**
+     * Read the headers and footers of a master page into Excel codes, as LibreOffice exports them to Xlsx.
+     */
+    private function setHeaderFooter(HeaderFooter $headerFooter, DOMElement $masterPage): void
+    {
+        $texts = [];
+        foreach ($masterPage->childNodes as $child) {
+            // style:header-first is ODF 1.3, loext:header-first is what LibreOffice writes in 1.2 extended
+            if (
+                $child instanceof DOMElement
+                && ($child->namespaceURI === $this->stylesNs || $child->namespaceURI === self::LOEXT_NS)
+                && $child->getAttributeNS($this->stylesNs, 'display') !== 'false'
+            ) {
+                $texts[$child->localName] = $this->headerFooterText($child);
+            }
+        }
+        $differentOddEven = isset($texts['header-left']) || isset($texts['footer-left']);
+        $differentFirst = isset($texts['header-first']) || isset($texts['footer-first']);
+        $headerFooter->setOddHeader($texts['header'] ?? '')
+            ->setOddFooter($texts['footer'] ?? '')
+            ->setDifferentOddEven($differentOddEven)
+            ->setDifferentFirst($differentFirst);
+        // A missing left or first header shares the header of the other pages
+        if ($differentOddEven) {
+            $headerFooter->setEvenHeader($texts['header-left'] ?? $texts['header'] ?? '')
+                ->setEvenFooter($texts['footer-left'] ?? $texts['footer'] ?? '');
+        }
+        if ($differentFirst) {
+            $headerFooter->setFirstHeader($texts['header-first'] ?? $texts['header'] ?? '')
+                ->setFirstFooter($texts['footer-first'] ?? $texts['footer'] ?? '');
+        }
+    }
+
+    private function headerFooterText(DOMElement $headerFooter): string
+    {
+        $text = '';
+        foreach (['region-left' => '&L', 'region-center' => '&C', 'region-right' => '&R'] as $region => $code) {
+            $regionElement = $headerFooter->getElementsByTagNameNS($this->stylesNs, $region)->item(0);
+            $regionText = $regionElement === null ? '' : $this->paragraphsText($regionElement);
+            if ($regionText !== '') {
+                $text .= $code . $regionText;
+            }
+        }
+        if ($text === '') {
+            // Paragraphs without regions are centred
+            $regionText = $this->paragraphsText($headerFooter);
+            $text = $regionText === '' ? '' : '&C' . $regionText;
+        }
+
+        return $text;
+    }
+
+    private function paragraphsText(DOMElement $element): string
+    {
+        $paragraphs = [];
+        foreach ($element->childNodes as $child) {
+            if ($child instanceof DOMElement && $child->namespaceURI === $this->textNs && ($child->localName === 'p' || $child->localName === 'h')) {
+                $paragraphs[] = $this->inlineText($child);
+            }
+        }
+
+        return implode("\n", $paragraphs);
+    }
+
+    private function inlineText(DOMNode $node): string
+    {
+        $text = '';
+        foreach ($node->childNodes as $child) {
+            if ($child instanceof DOMText) {
+                $text .= str_replace('&', '&&', $child->data);
+            } elseif ($child instanceof DOMElement) {
+                $text .= match ($child->namespaceURI === $this->textNs ? $child->localName : '') {
+                    's' => str_repeat(' ', max(1, (int) $child->getAttributeNS($this->textNs, 'c'))),
+                    'line-break' => "\n",
+                    'page-number' => '&P',
+                    'page-count' => '&N',
+                    'sheet-name' => '&A',
+                    'date' => '&D',
+                    'time' => '&T',
+                    // LibreOffice exports the document title as the file name
+                    'title' => '&F',
+                    'file-name' => match ($child->getAttributeNS($this->textNs, 'display')) {
+                        'name', 'name-and-extension' => '&F',
+                        'path' => '&Z',
+                        default => '&Z&F',
+                    },
+                    default => $this->inlineText($child),
+                };
+            }
+        }
+
+        return $text;
     }
 }

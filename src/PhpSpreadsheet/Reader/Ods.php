@@ -753,6 +753,7 @@ class Ods extends BaseReader
         string $xlinkNs,
         Spreadsheet $spreadsheet
     ): void {
+        $firstRow = $rowID;
         foreach ($childNode->childNodes as $grandchildNode) {
             /** @var DOMElement $grandchildNode */
             $grandkey = self::extractNodeName($grandchildNode->nodeName);
@@ -771,6 +772,14 @@ class Ods extends BaseReader
 
                     break;
             }
+        }
+        // The header rows are the rows to repeat on each printed page; LibreOffice splits them at a group boundary
+        $pageSetup = $spreadsheet->getSheetByName($worksheetName)?->getPageSetup();
+        if ($pageSetup !== null && $rowID > $firstRow && $childNode->localName === 'table-header-rows') {
+            $pageSetup->setRowsToRepeatAtTop([
+                $pageSetup->isRowsToRepeatAtTopSet() ? $pageSetup->getRowsToRepeatAtTop()[0] : $firstRow,
+                $rowID - 1,
+            ]);
         }
     }
 
@@ -1323,6 +1332,7 @@ class Ods extends BaseReader
         bool $processWidths = true,
         bool $processStyles = true
     ): void {
+        $firstColumn = $tableColumnIndex;
         foreach ($childNode->childNodes as $grandchildNode) {
             /** @var DOMElement $grandchildNode */
             $grandkey = self::extractNodeName($grandchildNode->nodeName);
@@ -1340,6 +1350,14 @@ class Ods extends BaseReader
 
                     break;
             }
+        }
+        // The header columns are the columns to repeat on each printed page; LibreOffice splits them at a group boundary
+        if ($tableColumnIndex > $firstColumn && $childNode->localName === 'table-header-columns') {
+            $pageSetup = $spreadsheet->getActiveSheet()->getPageSetup();
+            $pageSetup->setColumnsToRepeatAtLeft([
+                $pageSetup->isColumnsToRepeatAtLeftSet() ? $pageSetup->getColumnsToRepeatAtLeft()[0] : Coordinate::stringFromColumnIndex($firstColumn),
+                Coordinate::stringFromColumnIndex($tableColumnIndex - 1),
+            ]);
         }
     }
 
