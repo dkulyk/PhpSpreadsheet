@@ -149,7 +149,10 @@ class Drawing extends WriterPart
 
         $objWriter->endElement(); // draw:image
 
-        // Alternative text, which LibreOffice exports as the /Alt of the figure
+        // Alternative text, which LibreOffice exports as the /Alt of the figure ("title - description")
+        if ($drawing->getTitle() !== '') {
+            $objWriter->writeElement('svg:title', $drawing->getTitle());
+        }
         if ($drawing->getDescription() !== '') {
             $objWriter->writeElement('svg:desc', $drawing->getDescription());
         }

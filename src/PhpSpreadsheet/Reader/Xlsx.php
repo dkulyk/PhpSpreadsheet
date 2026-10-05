@@ -1560,6 +1560,7 @@ class Xlsx extends BaseReader
 
                                                     $objDrawing->setName(self::getArrayItemString(self::getAttributes($oneCellAnchor->pic->nvPicPr->cNvPr), 'name'));
                                                     $objDrawing->setDescription(self::getArrayItemString(self::getAttributes($oneCellAnchor->pic->nvPicPr->cNvPr), 'descr'));
+                                                    $objDrawing->setTitle(self::getArrayItemString(self::getAttributes($oneCellAnchor->pic->nvPicPr->cNvPr), 'title'));
                                                     $embedImageKey = self::getArrayItemString(
                                                         self::getAttributes($blip, $xmlNamespaceBase),
                                                         'embed'
@@ -1671,6 +1672,7 @@ class Xlsx extends BaseReader
                                                     }
                                                     $objDrawing->setName((string) self::getArrayItemString(self::getAttributes($twoCellAnchor->pic->nvPicPr->cNvPr), 'name'));
                                                     $objDrawing->setDescription(self::getArrayItemString(self::getAttributes($twoCellAnchor->pic->nvPicPr->cNvPr), 'descr'));
+                                                    $objDrawing->setTitle(self::getArrayItemString(self::getAttributes($twoCellAnchor->pic->nvPicPr->cNvPr), 'title'));
                                                     $embedImageKey = self::getArrayItemString(
                                                         self::getAttributes($blip, $xmlNamespaceBase),
                                                         'embed'

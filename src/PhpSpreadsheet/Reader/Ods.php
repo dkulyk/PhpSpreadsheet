@@ -1250,7 +1250,7 @@ class Ods extends BaseReader
         $svgHeight = $item->getAttribute('svg:height');
         $styleName = $item->getAttribute('draw:style-name');
         $drawImage = null;
-        $description = '';
+        $description = $title = '';
         foreach ($item->childNodes as $node) {
             // Check if the node is a standard element tag
             if ($node->nodeType === XML_ELEMENT_NODE && $node->nodeName === 'draw:image' && $drawImage === null) {
@@ -1258,6 +1258,8 @@ class Ods extends BaseReader
                 $drawImage = $node;
             } elseif ($node->nodeType === XML_ELEMENT_NODE && $node->nodeName === 'svg:desc') {
                 $description = $node->textContent;
+            } elseif ($node->nodeType === XML_ELEMENT_NODE && $node->nodeName === 'svg:title') {
+                $title = $node->textContent;
             }
         }
 
@@ -1295,6 +1297,7 @@ class Ods extends BaseReader
                     ->setHeight((int) $height)
                     ->setName($drawName)
                     ->setDescription($description)
+                    ->setTitle($title)
                     ->setWorksheet($worksheet);
             }
         }

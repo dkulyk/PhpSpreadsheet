@@ -1974,6 +1974,11 @@ $drawing->setPath('./images/officelogo.jpg');
 $drawing->setHeight(36);
 ```
 
+The description is the image's alternative text. An image can also have a
+title (`setTitle()`), written as `title` in Xlsx and `svg:title` in Ods.
+LibreOffice puts it before the description in the alternative text of a
+tagged PDF.
+
 To add the above drawing to the worksheet, use the following snippet of
 code. PhpSpreadsheet creates the link between the drawing and the
 worksheet:
