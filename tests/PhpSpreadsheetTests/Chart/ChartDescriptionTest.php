@@ -8,15 +8,24 @@ use PhpOffice\PhpSpreadsheet\Chart\Chart;
 use PhpOffice\PhpSpreadsheet\Chart\DataSeries;
 use PhpOffice\PhpSpreadsheet\Chart\DataSeriesValues;
 use PhpOffice\PhpSpreadsheet\Chart\PlotArea;
+use PhpOffice\PhpSpreadsheet\Chart\Renderer\MtJpGraphRenderer;
+use PhpOffice\PhpSpreadsheet\Chart\Title;
 use PhpOffice\PhpSpreadsheet\Reader\Xlsx as XlsxReader;
+use PhpOffice\PhpSpreadsheet\Settings;
 use PhpOffice\PhpSpreadsheet\Shared\File;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Html as HtmlWriter;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 use PHPUnit\Framework\TestCase;
 use ZipArchive;
 
 class ChartDescriptionTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        Settings::unsetChartRenderer();
+    }
+
     public function testDescriptionAndNameOfEveryAnchor(): void
     {
         $spreadsheet = new Spreadsheet();
@@ -66,6 +75,33 @@ class ChartDescriptionTest extends TestCase
         // The reader keeps naming a chart after its part, as getChartByName() callers expect
         self::assertSame(['chart1', 'chart2', 'chart3', 'chart4'], $reloaded->getActiveSheet()->getChartNames());
         $reloaded->disconnectWorksheets();
+    }
+
+    public function testHtmlWritesTheDescriptionAsAlt(): void
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray([['L1', 1], ['L2', 3], ['L3', 2]]);
+        $row = 1;
+        foreach ([['Sales rise in L2', 'Sales'], ['', 'Only a title'], ['Only a description', ''], ['', '']] as [$description, $title]) {
+            $chart = self::chart('', $description);
+            if ($title !== '') {
+                $chart->setTitle(new Title($title));
+            }
+            $chart->setTopLeftPosition("D$row");
+            $chart->setBottomRightPosition('J' . ($row + 9));
+            $sheet->addChart($chart);
+            $row += 12;
+        }
+
+        Settings::setChartRenderer(MtJpGraphRenderer::class);
+        $writer = new HtmlWriter($spreadsheet);
+        $writer->setIncludeCharts(true);
+        $html = $writer->generateHtmlAll();
+        $spreadsheet->disconnectWorksheets();
+
+        preg_match_all('~ alt="([^"]*)"~', $html, $alts);
+        self::assertSame(['Sales rise in L2', 'Only a title', 'Only a description', 'Embedded chart'], $alts[1]);
     }
 
     private static function chart(string $name, string $description): Chart
