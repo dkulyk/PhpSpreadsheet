@@ -883,6 +883,8 @@ class Html extends BaseWriter
             $html .= $this->lineEnding;
             $imageDetails = getimagesize($chartFileName) ?: ['', '', 'mime' => ''];
 
+            // The description is the alternative text; without one, the title stands in
+            $filedesc = $chart->getDescription() ?: $filedesc;
             $filedesc = $filedesc ? htmlspecialchars($filedesc, ENT_QUOTES) : 'Embedded chart';
             $picture = file_get_contents($chartFileName);
             unlink($chartFileName);
