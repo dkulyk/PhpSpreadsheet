@@ -136,8 +136,11 @@ class Drawing extends WriterPart
         $objWriter->writeAttribute('macro', '');
         $objWriter->startElement('xdr:nvGraphicFramePr');
         $objWriter->startElement('xdr:cNvPr');
-        $objWriter->writeAttribute('name', 'Chart ' . $relationId);
+        $objWriter->writeAttribute('name', $chart->getName() === '' ? 'Chart ' . $relationId : $chart->getName());
         $objWriter->writeAttribute('id', (string) (1025 * $relationId));
+        if ($chart->getDescription() !== '') {
+            $objWriter->writeAttribute('descr', $chart->getDescription());
+        }
         $objWriter->endElement();
         $objWriter->startElement('xdr:cNvGraphicFramePr');
         $objWriter->startElement('a:graphicFrameLocks');
@@ -249,6 +252,19 @@ class Drawing extends WriterPart
 
             //a:hlinkClick
             $this->writeHyperLinkDrawing($objWriter, $hlinkClickId);
+
+            // The form of Excel and LibreOffice
+            if ($drawing->isDecorative()) {
+                $objWriter->startElement('a:extLst');
+                $objWriter->startElement('a:ext');
+                $objWriter->writeAttribute('uri', '{C183D7F6-B498-43B3-948B-1728B52AA6E4}');
+                $objWriter->startElement('adec:decorative');
+                $objWriter->writeAttribute('xmlns:adec', 'http://schemas.microsoft.com/office/drawing/2017/decorative');
+                $objWriter->writeAttribute('val', '1');
+                $objWriter->endElement();
+                $objWriter->endElement();
+                $objWriter->endElement();
+            }
 
             $objWriter->endElement();
 
@@ -534,6 +550,10 @@ class Drawing extends WriterPart
         $objWriter->writeAttribute('o:spid', '_x0000_s' . $id);
         $objWriter->writeAttribute('type', '#_x0000_t75');
         $objWriter->writeAttribute('style', "position:absolute;margin-left:{$marginLeft}px;margin-top:{$marginTop}px;width:{$width}px;height:{$height}px;z-index:1");
+        // The alternative text, as Excel writes it; o:title below is the name
+        if ($image->getDescription() !== '') {
+            $objWriter->writeAttribute('alt', $image->getDescription());
+        }
 
         // v:imagedata
         $objWriter->startElement('v:imagedata');
