@@ -85,6 +85,7 @@ PhpSpreadsheet provides specific getters/setters for a number of pre-defined pro
 | Category         | string                  | getCategory()<br />setCategory()             | Not supported in xls files.                               |
 | Company          | string                  | getCompany()<br />setCompany()               | Not supported in xls files.                               |
 | Manager          | string                  | getManager()<br />setManager()               | Not supported in xls files.                               |
+| Language         | string                  | getLanguage()<br />setLanguage()             | A BCP 47 tag such as "en-US". Xlsx, Ods and Html only.    |
 > **Note:** Not all Spreadsheet File Formats support all of these properties.
 > For example: "Category", "Company" and "Manager" are not supported in `xls` files.
 
@@ -1973,6 +1974,11 @@ $drawing->setDescription('Logo');
 $drawing->setPath('./images/officelogo.jpg');
 $drawing->setHeight(36);
 ```
+
+The description is the image's alternative text. An image can also have a
+title (`setTitle()`), written as `title` in Xlsx and `svg:title` in Ods.
+LibreOffice puts it before the description in the alternative text of a
+tagged PDF.
 
 To add the above drawing to the worksheet, use the following snippet of
 code. PhpSpreadsheet creates the link between the drawing and the
