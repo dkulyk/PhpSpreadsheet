@@ -19,6 +19,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 - `Document\Properties::setLanguage()`: the language of a spreadsheet as a BCP 47 tag, written and read as `dc:language` in Xlsx and Ods; the Ods writer also gives it to the default cell style, where LibreOffice keeps a spreadsheet's language, as LibreOffice writes it (the Western, Asian or complex slot by script, and `style:rfc-language-tag` for a tag with more than a language and a country), and the Ods reader reads it from there when there is no `dc:language`. Html writes and reads it as the `lang` of the `html` element. [Issue #5040](https://github.com/PHPOffice/PhpSpreadsheet/issues/5040) [PR #5041](https://github.com/PHPOffice/PhpSpreadsheet/pull/5041)
 - Xlsx Writer and Reader: `Chart::setDescription()` is the alternative text of a chart, written as `descr` of the chart's frame and read back, and the frame takes the chart's name; LibreOffice exports it as `/Alt` of the chart in a tagged PDF. [Issue #5038](https://github.com/PHPOffice/PhpSpreadsheet/issues/5038) [PR #5039](https://github.com/PHPOffice/PhpSpreadsheet/pull/5039)
 - `BaseDrawing::setDecorative()` marks an image as decorative. Xlsx writes and reads it as Excel and LibreOffice do (`adec:decorative` in the image's `cNvPr`), Ods as LibreOffice does (`loext:decorative` in the frame's graphic style, which the writer now defines; the reader also takes ODF 1.4's `draw:decorative`); LibreOffice then leaves the image out of a tagged PDF as an artifact. Html writes and reads it as an empty `alt`. [Issue #5036](https://github.com/PHPOffice/PhpSpreadsheet/issues/5036) [PR #5037](https://github.com/PHPOffice/PhpSpreadsheet/pull/5037)
+- Ods Writer writes data validation (the rule, the input prompt and the error alert), and Ods Reader reads it; it was lost on an Ods save.
 
 ### Removed
 
@@ -69,6 +70,7 @@ Some earlier branches remain supported and security fixes are applied to them; i
 - Html and Pdf Writers display WMF and EMF images (as PNG) instead of an empty image.
 - Ods Writer no longer writes the formula text as the cell value when formulas are not pre-calculated. [Issue #5045](https://github.com/PHPOffice/PhpSpreadsheet/issues/5045) [PR #5046](https://github.com/PHPOffice/PhpSpreadsheet/pull/5046)
 - Avoid some breaks caused by new versions of libxml. [PR #5054](https://github.com/PHPOffice/PhpSpreadsheet/pull/5054)
+- Moving the relative references of a formula (relative defined names, Ods data validation) wraps negative shifts and whole-column and whole-row ranges around the sheet edge as the cell references already did, instead of throwing or giving `A-1`; it moves `Z:Z` by one column to `AA:AA` instead of `AAAAZ`, and leaves a function name such as `LOG10(` alone.
 
 ## 2026-09-15 - 5.10.0
 
